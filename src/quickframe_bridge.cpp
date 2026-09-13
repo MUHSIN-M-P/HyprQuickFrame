@@ -36,9 +36,11 @@ void QuickFrameBridge::initTargetScreen() {
                     m_monitorName = obj.value(QStringLiteral("name")).toString();
                     m_monitorX = obj.value(QStringLiteral("x")).toInt();
                     m_monitorY = obj.value(QStringLiteral("y")).toInt();
-                    m_screenWidth = obj.value(QStringLiteral("width")).toInt();
-                    m_screenHeight = obj.value(QStringLiteral("height")).toInt();
                     m_monitorScale = obj.value(QStringLiteral("scale")).toDouble(1.0);
+                    int physW = obj.value(QStringLiteral("width")).toInt();
+                    int physH = obj.value(QStringLiteral("height")).toInt();
+                    m_screenWidth = qRound(physW / m_monitorScale);
+                    m_screenHeight = qRound(physH / m_monitorScale);
                     break;
                 }
             }
@@ -72,13 +74,12 @@ void QuickFrameBridge::captureScreen() {
     m_tempPath = tempFile.fileName();
     tempFile.close();
 
-    // grim -g "<x>,<y> <w>x<h>" <tempPath>
-    QString geom = QStringLiteral("%1,%2 %3x%4")
-        .arg(m_monitorX).arg(m_monitorY)
-        .arg(m_screenWidth).arg(m_screenHeight);
-
     QProcess grim;
-    grim.start(QStringLiteral("grim"), {QStringLiteral("-g"), geom, m_tempPath});
+    if (!m_monitorName.isEmpty()) {
+        grim.start(QStringLiteral("grim"), {QStringLiteral("-o"), m_monitorName, m_tempPath});
+    } else {
+        grim.start(QStringLiteral("grim"), {m_tempPath});
+    }
     grim.waitForFinished(3000);
 
     emit tempPathChanged();

@@ -45,7 +45,7 @@ int main(int argc, char *argv[]) {
     lWindow->setScope(QStringLiteral("hyprquickframe"));
     lWindow->setLayer(LayerShellQt::Window::LayerOverlay);
     lWindow->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityOnDemand);
-    lWindow->setExclusiveZone(0);
+    lWindow->setExclusiveZone(-1);
     lWindow->setAnchors({LayerShellQt::Window::AnchorTop, LayerShellQt::Window::AnchorBottom,
                         LayerShellQt::Window::AnchorLeft, LayerShellQt::Window::AnchorRight});
     if (targetScreen) {
