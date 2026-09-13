@@ -1,5 +1,4 @@
 import QtQuick
-import Quickshell
 
 Item {
     id: root
@@ -54,7 +53,7 @@ Item {
         // Top-Left Corner ⌜ (shifted outside by 8px)
         Image {
             x: -8; y: -8; width: 32; height: 32
-            source: Quickshell.shellPath("icons/lens_corner.svg")
+            source: Qt.resolvedUrl("../icons/lens_corner.svg")
             rotation: 0
             MouseArea {
                 anchors.fill: parent; anchors.margins: -8
@@ -81,7 +80,7 @@ Item {
         // Top-Right Corner ⌝ (shifted outside by 8px)
         Image {
             x: parent.width - 24; y: -8; width: 32; height: 32
-            source: Quickshell.shellPath("icons/lens_corner.svg")
+            source: Qt.resolvedUrl("../icons/lens_corner.svg")
             rotation: 90
             MouseArea {
                 anchors.fill: parent; anchors.margins: -8
@@ -107,7 +106,7 @@ Item {
         // Bottom-Right Corner ⌟ (shifted outside by 8px)
         Image {
             x: parent.width - 24; y: parent.height - 24; width: 32; height: 32
-            source: Quickshell.shellPath("icons/lens_corner.svg")
+            source: Qt.resolvedUrl("../icons/lens_corner.svg")
             rotation: 180
             MouseArea {
                 anchors.fill: parent; anchors.margins: -8
@@ -132,7 +131,7 @@ Item {
         // Bottom-Left Corner ⌞ (shifted outside by 8px)
         Image {
             x: -8; y: parent.height - 24; width: 32; height: 32
-            source: Quickshell.shellPath("icons/lens_corner.svg")
+            source: Qt.resolvedUrl("../icons/lens_corner.svg")
             rotation: 270
             MouseArea {
                 anchors.fill: parent; anchors.margins: -8
@@ -294,7 +293,7 @@ Item {
             Image {
                 width: 17; height: 17
                 anchors.verticalCenter: parent.verticalCenter
-                source: Quickshell.shellPath("icons/copy_text.svg")
+                source: Qt.resolvedUrl("../icons/copy_text.svg")
                 fillMode: Image.PreserveAspectFit
             }
 

@@ -1,0 +1,22 @@
+<RCC>
+    <qresource prefix="/">
+        <file>shell.qml</file>
+        <file>src/FreezeScreen.qml</file>
+        <file>src/SelectionOverlay.qml</file>
+        <file>src/BoxSelector.qml</file>
+        <file>src/RegionSelector.qml</file>
+        <file>src/WindowSelector.qml</file>
+        <file>shaders/dimming.frag.qsb</file>
+        <file>icons/box.svg</file>
+        <file>icons/copy.svg</file>
+        <file>icons/copy_image.svg</file>
+        <file>icons/copy_text.svg</file>
+        <file>icons/lens_corner.svg</file>
+        <file>icons/ocr.svg</file>
+        <file>icons/region.svg</file>
+        <file>icons/save.svg</file>
+        <file>icons/screen.svg</file>
+        <file>icons/translate.svg</file>
+        <file>icons/window.svg</file>
+    </qresource>
+</RCC>

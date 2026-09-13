@@ -1,6 +1,6 @@
 # HyprQuickFrame
 
-An intelligent, lightning-fast, and beautiful screenshot tool for Hyprland / Wayland with smart element detection, circle-to-select snapping, enhanced OCR, and buttery-smooth animations built with [Quickshell](https://quickshell.org).
+An intelligent, lightning-fast, and beautiful screenshot tool for Hyprland / Wayland with smart element detection, circle-to-select snapping, enhanced OCR, and buttery-smooth animations built with native **Qt6 & Wayland Layer Shell** (no Quickshell dependency required).
 
 ---
 
@@ -18,6 +18,7 @@ An intelligent, lightning-fast, and beautiful screenshot tool for Hyprland / Way
   - Drag-to-select regions with live floating dimension pills (`W × H`).
   - Fullscreen instant capture.
 - **⚡ Zero-Jank Performance:**
+  - Native C++ executable with zero runtime shell daemons.
   - Asynchronous background texture loading prevents UI thread freezes on 4K and multi-monitor setups.
   - Hardware-accelerated GPU drawing via Qt FramebufferObject and branchless anti-aliased shaders.
   - Direct piping to `wl-copy` with explicit `image/png` MIME headers (no redundant disk writes when copying).
@@ -35,9 +36,10 @@ Ensure these standard packages are installed on your system:
 
 | Package | Purpose | Standard Package Name |
 | :--- | :--- | :--- |
-| **quickshell** | Core UI runtime | `quickshell` (AUR / Nix / Copr) |
+| **qt6-declarative** | Qt6 Quick / QML runtime | `qt6-declarative` / `qt6-qtdeclarative-devel` |
+| **layer-shell-qt** | Wayland Layer Shell support | `layer-shell-qt` / `layer-shell-qt-devel` |
 | **grim** | Screen capture | `grim` |
-| **imagemagick** | Image cropping & OCR preprocessing | `imagemagick` |
+| **imagemagick** | Image cropping & OCR preprocessing | `imagemagick` / `ImageMagick` |
 | **wl-clipboard** | Wayland clipboard integration | `wl-clipboard` |
 | **tesseract** *(Optional)* | OCR text extraction | `tesseract` + `tesseract-data-eng` |
 | **python-opencv** *(Optional)*| Element & paragraph detection | `python-opencv` (`python3-opencv`) |
@@ -49,8 +51,8 @@ Ensure these standard packages are installed on your system:
 
 ### One-Command Setup:
 ```bash
-git clone https://github.com/MUHSIN-M-P/HyprQuickFrame.git ~/.config/quickshell/HyprQuickFrame
-cd ~/.config/quickshell/HyprQuickFrame
+git clone https://github.com/MUHSIN-M-P/HyprQuickFrame.git
+cd HyprQuickFrame
 ./install.sh
 ```
 
@@ -59,13 +61,24 @@ cd ~/.config/quickshell/HyprQuickFrame
 #### Arch Linux
 1. Install dependencies:
    ```bash
-   sudo pacman -S grim imagemagick wl-clipboard tesseract tesseract-data-eng python-opencv python-numpy
-   yay -S quickshell
+   sudo pacman -S cmake qt6-declarative layer-shell-qt grim imagemagick wl-clipboard tesseract tesseract-data-eng python-opencv python-numpy
    ```
-2. Clone repository:
+2. Clone and build:
    ```bash
-   git clone https://github.com/MUHSIN-M-P/HyprQuickFrame.git ~/.config/quickshell/HyprQuickFrame
+   git clone https://github.com/MUHSIN-M-P/HyprQuickFrame.git
+   cd HyprQuickFrame
+   cmake -B build -DCMAKE_BUILD_TYPE=Release
+   cmake --build build
+   sudo cmake --install build
    ```
+
+#### Fedora
+```bash
+sudo dnf install cmake qt6-qtdeclarative-devel layer-shell-qt-devel grim ImageMagick wl-clipboard tesseract tesseract-langpack-eng python3-opencv python3-numpy
+git clone https://github.com/MUHSIN-M-P/HyprQuickFrame.git
+cd HyprQuickFrame
+./install.sh
+```
 
 #### Nix / NixOS
 Add HyprQuickFrame to your flake inputs:
@@ -92,16 +105,14 @@ Add these keybindings to your `~/.config/hypr/hyprland.conf`:
 
 ```ini
 # Launch HyprQuickFrame on Print Screen
-bind = , Print, exec, quickshell -c HyprQuickFrame -n
+bind = , Print, exec, hyprquickframe
 
 # Quick region screenshot
-bind = $mainMod, Print, exec, quickshell -c HyprQuickFrame -n
+bind = $mainMod, Print, exec, hyprquickframe
 
 # Meta + Shift + S (macOS / Windows style shortcut)
-bind = $mainMod SHIFT, S, exec, quickshell -c HyprQuickFrame -n
+bind = $mainMod SHIFT, S, exec, hyprquickframe
 ```
-
-*(The `-n` flag ensures only a single instance opens at a time).*
 
 ---
 

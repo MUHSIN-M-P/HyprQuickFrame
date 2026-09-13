@@ -1,5 +1,4 @@
 import QtQuick
-import Quickshell
 
 Item {
     id: root
@@ -372,8 +371,7 @@ Item {
                     root._ptBuf       = []
                     drawCanvas.requestPaint()
                 } else {
-                    Quickshell.execDetached(["rm", "-f", root.tempPath])
-                    Qt.quit()
+                    bridge.cancel()
                 }
                 return
             }
