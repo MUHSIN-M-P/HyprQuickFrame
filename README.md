@@ -146,3 +146,5 @@ HyprQuickFrame saves screenshots to the first existing directory found in this o
 ## 📄 License
 
 Licensed under the MIT License.
+* **Original Work:** [HyprQuickshot](https://github.com/JamDon2/hyprquickshot) © 2025 JamDon2.
+* **Enhanced and Modified by Myself**.
