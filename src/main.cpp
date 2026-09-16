@@ -55,9 +55,15 @@ int main(int argc, char *argv[]) {
 
     // Expose native bridge and screen context to QML
     view.engine()->rootContext()->setContextProperty(QStringLiteral("bridge"), &bridge);
+    QObject::connect(view.engine(), &QQmlEngine::quit, &app, &QGuiApplication::quit);
 
     view.setResizeMode(QQuickView::SizeRootObjectToView);
     view.setSource(QUrl(QStringLiteral("qrc:/shell.qml")));
+
+    if (view.status() == QQuickView::Error) {
+        bridge.cancel();
+        return 1;
+    }
 
     view.show();
 

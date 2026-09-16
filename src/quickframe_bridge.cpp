@@ -18,7 +18,8 @@ QuickFrameBridge::~QuickFrameBridge() {
     deleteTemp();
     if (m_detectProcess) {
         m_detectProcess->kill();
-        m_detectProcess->deleteLater();
+        m_detectProcess->waitForFinished(100);
+        delete m_detectProcess;
         m_detectProcess = nullptr;
     }
 }
@@ -225,7 +226,7 @@ void QuickFrameBridge::executeAction(const QString& action, double x, double y, 
             "text=$(tesseract \"$pre\" stdout -l eng --psm 6 --oem 1 2>/dev/null | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'); "
             "rm -f \"$pre\"; "
             "if [ -n \"$text\" ]; then "
-            "  printf '%%s' \"$text\" | wl-copy; "
+            "  printf '%s' \"$text\" | wl-copy; "
             "  notify-send -a \"HyprQuickFrame\" \"OCR Text Copied\" \"$text\"; "
             "else "
             "  notify-send -a \"HyprQuickFrame\" \"OCR Text\" \"No text recognized in selection\" -u low; "
@@ -242,7 +243,7 @@ void QuickFrameBridge::executeAction(const QString& action, double x, double y, 
             "text=$(tesseract \"$pre\" stdout -l eng --psm 6 --oem 1 2>/dev/null | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'); "
             "rm -f \"$pre\"; "
             "if [ -n \"$text\" ]; then "
-            "  printf '%%s' \"$text\" | wl-copy; "
+            "  printf '%s' \"$text\" | wl-copy; "
             "  notify-send -a \"HyprQuickFrame\" \"Google Lens\" \"Opening search for: $text\"; "
             "  python3 -c \"import urllib.parse, webbrowser, sys; webbrowser.open('https://www.google.com/search?q=' + urllib.parse.quote(sys.argv[1]))\" \"$text\"; "
             "else "

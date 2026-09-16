@@ -8,8 +8,8 @@ Item {
 
     // Shader customization properties  
     property real dimOpacity: 0.6  
-    property real borderRadius: 16.0  
-    property real outlineThickness: 2.0  
+    property real borderRadius: 12.0  
+    property real outlineThickness: 1.5  
     property url fragmentShader: Qt.resolvedUrl("../shaders/dimming.frag.qsb")  
       
     property point startPos  

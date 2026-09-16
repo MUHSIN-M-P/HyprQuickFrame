@@ -15,11 +15,13 @@ FreezeScreen {
         category: "Hyprquickshot"
         property bool saveToDisk: true 
         property string lastMode: "region"
-        property bool ocrMode: false
     }
 
     property var    detectedBoxes: (typeof bridge !== "undefined" && bridge) ? bridge.detectedBoxes : []
     property string mode:          settings.lastMode
+
+    readonly property var modesList: ["region", "box", "window", "screen"]
+    readonly property int modeIndex: Math.max(0, modesList.indexOf(root.mode))
 
     // ── Keyboard Shortcuts ────────────────────────────────────────────────
     Shortcut {
@@ -37,7 +39,6 @@ FreezeScreen {
     Shortcut { sequence: "3"; onActivated: { root.mode = "window"; settings.lastMode = "window" } }
     Shortcut { sequence: "4"; onActivated: { root.processScreenshot(0, 0, root.width, root.height) } }
     Shortcut { sequence: "s"; onActivated: { settings.saveToDisk = !settings.saveToDisk } }
-    Shortcut { sequence: "o"; onActivated: { settings.ocrMode = !settings.ocrMode } }
 
     function executeAction(action, x, y, width, height) {
         root.visible = false
@@ -48,7 +49,7 @@ FreezeScreen {
     }
 
     function processScreenshot(x, y, width, height) {
-        root.executeAction(settings.ocrMode ? "ocr" : "default", x, y, width, height)
+        root.executeAction("default", x, y, width, height)
     }
 
     // ── Selectors ─────────────────────────────────────────────────────────
@@ -56,7 +57,7 @@ FreezeScreen {
     RegionSelector {
         visible: root.mode === "region"
         anchors.fill: parent
-        dimOpacity: 0.5; borderRadius: 16.0; outlineThickness: 2.0
+        dimOpacity: 0.5; borderRadius: 12.0; outlineThickness: 1.5
         onRegionSelected: (x, y, w, h) => root.processScreenshot(x, y, w, h)
         onActionRequested: (action, x, y, w, h) => root.executeAction(action, x, y, w, h)
     }
@@ -67,7 +68,7 @@ FreezeScreen {
         tempPath:     root.tempPath
         monitorScale: (typeof bridge !== "undefined" && bridge) ? bridge.monitorScale : 1.0
         boxes:        root.detectedBoxes
-        dimOpacity:   0.5; borderRadius: 16.0; outlineThickness: 2.0
+        dimOpacity:   0.5; borderRadius: 12.0; outlineThickness: 1.5
         onRegionSelected: (x, y, w, h) => root.processScreenshot(x, y, w, h)
         onActionRequested: (action, x, y, w, h) => root.executeAction(action, x, y, w, h)
     }
@@ -75,98 +76,243 @@ FreezeScreen {
     WindowSelector {
         visible: root.mode === "window"
         anchors.fill: parent
-        dimOpacity: 0.5; borderRadius: 16.0; outlineThickness: 2.0
+        dimOpacity: 0.5; borderRadius: 12.0; outlineThickness: 1.5
         onRegionSelected: (x, y, w, h) => root.processScreenshot(x, y, w, h)
     }
 
-    // ── Bottom toolbar ────────────────────────────────────────────────────
+    // ── Apple-Style Bottom Floating Toolbar ───────────────────────────────
     Rectangle {
         id: toolbar
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
-        anchors.bottomMargin: 40
-        width: toolbarRow.width + 24
-        height: toolbarRow.height + 16
-        color: Qt.rgba(0.08, 0.1, 0.14, 0.88)
-        border { color: Qt.rgba(0.4, 0.5, 0.7, 0.35); width: 1 }
-        radius: 14
+        anchors.bottomMargin: 44
+        width: toolbarRow.implicitWidth + 32
+        height: 64
+        radius: 32
+
+        // Apple frosted dark glass appearance
+        color: Qt.rgba(0.11, 0.12, 0.15, 0.90)
+        border {
+            color: Qt.rgba(1.0, 1.0, 1.0, 0.18)
+            width: 1
+        }
 
         Row {
             id: toolbarRow
             anchors.centerIn: parent
             spacing: 20
 
-            // Mode buttons
-            Row {
-                id: buttonRow
-                spacing: 8
+            // Apple Segmented Mode Switcher
+            Rectangle {
+                id: segmentedContainer
+                width: segmentedRow.implicitWidth + 8
+                height: 50
+                radius: 25
+                anchors.verticalCenter: parent.verticalCenter
+                color: Qt.rgba(0.0, 0.0, 0.0, 0.35)
+                border {
+                    color: Qt.rgba(1.0, 1.0, 1.0, 0.10)
+                    width: 1
+                }
 
-                Repeater {
-                    model: [
-                        { mode: "region", icon: "region", key: "1" },
-                        { mode: "box",    icon: "box",    key: "2" },
-                        { mode: "window", icon: "window", key: "3" },
-                        { mode: "screen", icon: "screen", key: "4" }
-                    ]
+                // Smooth Sliding Active Pill Indicator (Apple Blue)
+                Rectangle {
+                    id: slidingIndicator
+                    width: 58
+                    height: 42
+                    radius: 21
+                    y: 4
+                    x: 4 + root.modeIndex * (58 + 6)
+                    color: "#0a84ff"
+                    border {
+                        color: Qt.rgba(0.45, 0.78, 1.0, 0.75)
+                        width: 1
+                    }
 
-                    Button {
-                        id: modeBtn
-                        implicitWidth: 48; implicitHeight: 48
+                    Behavior on x {
+                        NumberAnimation {
+                            duration: 240
+                            easing.type: Easing.OutCubic
+                        }
+                    }
+                }
 
-                        ToolTip.visible: modeBtn.hovered
-                        ToolTip.text: modelData.mode.toUpperCase() + " [" + modelData.key + "]"
-                        ToolTip.delay: 250
+                Row {
+                    id: segmentedRow
+                    anchors.centerIn: parent
+                    spacing: 6
 
-                        background: Rectangle {
-                            radius: 8
-                            color: mode === modelData.mode
-                                   ? Qt.rgba(0.3, 0.45, 0.8, 0.6)
-                                   : modeBtn.hovered
-                                     ? Qt.rgba(0.35, 0.4, 0.5, 0.5)
-                                     : Qt.rgba(0.2, 0.22, 0.28, 0.5)
-                            border {
-                                color: mode === modelData.mode
-                                       ? Qt.rgba(0.5, 0.7, 1.0, 0.7)
-                                       : "transparent"
-                                width: 1
+                    Repeater {
+                        model: [
+                            { mode: "region", icon: "region", key: "1", title: "Area" },
+                            { mode: "box",    icon: "box",    key: "2", title: "Smart Box" },
+                            { mode: "window", icon: "window", key: "3", title: "Window" },
+                            { mode: "screen", icon: "screen", key: "4", title: "Full Screen" }
+                        ]
+
+                        Item {
+                            id: segBtn
+                            width: 58
+                            height: 42
+
+                            readonly property bool isSelected: root.mode === modelData.mode
+
+                            ToolTip.visible: segMouseArea.containsMouse
+                            ToolTip.text: modelData.title + " [" + modelData.key + "]"
+                            ToolTip.delay: 200
+
+                            Image {
+                                id: segIcon
+                                anchors.centerIn: parent
+                                width: 24; height: 24
+                                source: Qt.resolvedUrl(`icons/${modelData.icon}.svg`)
+                                fillMode: Image.PreserveAspectFit
+                                opacity: segBtn.isSelected ? 1.0 : (segMouseArea.containsMouse ? 0.88 : 0.55)
+                                scale: segBtn.isSelected ? 1.06 : (segMouseArea.pressed ? 0.94 : (segMouseArea.containsMouse ? 1.03 : 0.96))
+
+                                Behavior on opacity { NumberAnimation { duration: 140 } }
+                                Behavior on scale { NumberAnimation { duration: 140 } }
                             }
-                            Behavior on color { ColorAnimation { duration: 100 } }
-                        }
 
-                        contentItem: Image {
-                            anchors.centerIn: parent
-                            width: 24; height: 24
-                            source: Qt.resolvedUrl(`icons/${modelData.icon}.svg`)
-                            fillMode: Image.PreserveAspectFit
-                        }
-
-                        onClicked: {
-                            root.mode = modelData.mode
-                            settings.lastMode = modelData.mode
-                            if (modelData.mode === "screen")
-                                root.processScreenshot(0, 0, root.width, root.height)
+                            MouseArea {
+                                id: segMouseArea
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    root.mode = modelData.mode
+                                    settings.lastMode = modelData.mode
+                                    if (modelData.mode === "screen")
+                                        root.processScreenshot(0, 0, root.width, root.height)
+                                }
+                            }
                         }
                     }
                 }
             }
 
-            // Toggles
-            Row {
-                spacing: 16
-                anchors.verticalCenter: buttonRow.verticalCenter
+            // Elegant Divider
+            Rectangle {
+                width: 1.5
+                height: 30
+                radius: 0.75
+                color: Qt.rgba(1.0, 1.0, 1.0, 0.15)
+                anchors.verticalCenter: parent.verticalCenter
+            }
+
+            // Apple-Style "Save to disk" Toggle
+            Item {
+                id: saveToggleContainer
+                implicitWidth: saveRow.implicitWidth
+                implicitHeight: 36
+                anchors.verticalCenter: parent.verticalCenter
 
                 Row {
-                    spacing: 8; anchors.verticalCenter: parent.verticalCenter
-                    Text { text: "Save to disk"; color: "#fff"; font.pixelSize: 14
-                           verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter }
-                    Switch { checked: settings.saveToDisk; onCheckedChanged: settings.saveToDisk = checked }
+                    id: saveRow
+                    spacing: 11
+                    anchors.verticalCenter: parent.verticalCenter
+
+                    Text {
+                        text: "Save to disk"
+                        color: settings.saveToDisk ? "#ffffff" : "#c4c8d4"
+                        font.pixelSize: 14
+                        font.weight: Font.Medium
+                        verticalAlignment: Text.AlignVCenter
+                        anchors.verticalCenter: parent.verticalCenter
+
+                        Behavior on color { ColorAnimation { duration: 180 } }
+                    }
+
+                    // Custom Apple iOS/macOS Pill Switch
+                    Rectangle {
+                        id: switchTrack
+                        width: 48
+                        height: 28
+                        radius: 14
+                        anchors.verticalCenter: parent.verticalCenter
+                        color: settings.saveToDisk ? "#34c759" : Qt.rgba(1.0, 1.0, 1.0, 0.16)
+                        border {
+                            color: settings.saveToDisk ? Qt.rgba(0.2, 0.85, 0.35, 0.6) : Qt.rgba(1.0, 1.0, 1.0, 0.12)
+                            width: 1
+                        }
+
+                        Behavior on color { ColorAnimation { duration: 200 } }
+
+                        Rectangle {
+                            id: switchThumb
+                            width: 24
+                            height: 24
+                            radius: 12
+                            y: 2
+                            x: settings.saveToDisk ? parent.width - width - 2 : 2
+                            color: "#ffffff"
+
+                            Behavior on x {
+                                NumberAnimation {
+                                    duration: 200
+                                    easing.type: Easing.OutCubic
+                                }
+                            }
+                        }
+                    }
                 }
 
-                Row {
-                    spacing: 8; anchors.verticalCenter: parent.verticalCenter
-                    Text { text: "OCR Mode"; color: "#fff"; font.pixelSize: 14
-                           verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter }
-                    Switch { checked: settings.ocrMode; onCheckedChanged: settings.ocrMode = checked }
+                MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: settings.saveToDisk = !settings.saveToDisk
+                }
+            }
+
+            // Elegant Divider
+            Rectangle {
+                width: 1.5
+                height: 30
+                radius: 0.75
+                color: Qt.rgba(1.0, 1.0, 1.0, 0.15)
+                anchors.verticalCenter: parent.verticalCenter
+            }
+
+            // Apple Close / Cancel Capsule Button
+            Rectangle {
+                width: 32
+                height: 32
+                radius: 16
+                anchors.verticalCenter: parent.verticalCenter
+                color: escMouseArea.pressed
+                       ? Qt.rgba(1.0, 1.0, 1.0, 0.25)
+                       : (escMouseArea.containsMouse ? Qt.rgba(1.0, 1.0, 1.0, 0.16) : Qt.rgba(1.0, 1.0, 1.0, 0.08))
+                border {
+                    color: Qt.rgba(1.0, 1.0, 1.0, 0.15)
+                    width: 1
+                }
+
+                Behavior on color { ColorAnimation { duration: 120 } }
+
+                Text {
+                    anchors.centerIn: parent
+                    text: "✕"
+                    color: escMouseArea.containsMouse ? "#ffffff" : "#b0b5c4"
+                    font.pixelSize: 12
+                    font.weight: Font.DemiBold
+                }
+
+                ToolTip.visible: escMouseArea.containsMouse
+                ToolTip.text: "Cancel [Esc]"
+                ToolTip.delay: 200
+
+                MouseArea {
+                    id: escMouseArea
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        if (typeof bridge !== "undefined" && bridge) {
+                            bridge.cancel()
+                        } else {
+                            Qt.quit()
+                        }
+                    }
                 }
             }
         }

@@ -41,7 +41,7 @@ Item {
         root.isResizing = false
     }
 
-    // ── Outer Selection Handles (positioned strictly outside the content box) ──
+    // ── Outer Selection Handles (aligned with box perimeter) ──
     Item {
         id: boxFrame
         x: root.selectionX
@@ -50,9 +50,9 @@ Item {
         height: root.selectionHeight
 
         // ── 4 Outer Curved Corner Brackets ────────────────────────────────
-        // Top-Left Corner ⌜ (shifted outside by 8px)
+        // Top-Left Corner ⌜
         Image {
-            x: -8; y: -8; width: 32; height: 32
+            x: -4; y: -4; width: 32; height: 32
             source: Qt.resolvedUrl("../icons/lens_corner.svg")
             rotation: 0
             MouseArea {
@@ -77,9 +77,9 @@ Item {
             }
         }
 
-        // Top-Right Corner ⌝ (shifted outside by 8px)
+        // Top-Right Corner ⌝
         Image {
-            x: parent.width - 24; y: -8; width: 32; height: 32
+            x: parent.width - 28; y: -4; width: 32; height: 32
             source: Qt.resolvedUrl("../icons/lens_corner.svg")
             rotation: 90
             MouseArea {
@@ -103,9 +103,9 @@ Item {
             }
         }
 
-        // Bottom-Right Corner ⌟ (shifted outside by 8px)
+        // Bottom-Right Corner ⌟
         Image {
-            x: parent.width - 24; y: parent.height - 24; width: 32; height: 32
+            x: parent.width - 28; y: parent.height - 28; width: 32; height: 32
             source: Qt.resolvedUrl("../icons/lens_corner.svg")
             rotation: 180
             MouseArea {
@@ -128,9 +128,9 @@ Item {
             }
         }
 
-        // Bottom-Left Corner ⌞ (shifted outside by 8px)
+        // Bottom-Left Corner ⌞
         Image {
-            x: -8; y: parent.height - 24; width: 32; height: 32
+            x: -4; y: parent.height - 28; width: 32; height: 32
             source: Qt.resolvedUrl("../icons/lens_corner.svg")
             rotation: 270
             MouseArea {
@@ -154,18 +154,18 @@ Item {
             }
         }
 
-        // ── 4 Outer Edge Drag Grips & Strips ───────────────────────────────
+        // ── 4 Edge Drag Grips ──────────────────────────────────────────────
         // Top Edge Grip
         Rectangle {
-            x: (parent.width - 28) / 2; y: -6
-            width: 28; height: 3; radius: 1.5
+            x: (parent.width - 28) / 2; y: -2
+            width: 28; height: 4; radius: 2
             color: "#ffffff"
             border { color: Qt.rgba(0, 0, 0, 0.35); width: 0.5 }
         }
         MouseArea {
             anchors { left: parent.left; right: parent.right }
             anchors.leftMargin: 26; anchors.rightMargin: 26
-            y: -14; height: 16
+            y: -10; height: 20
             cursorShape: Qt.SizeVerCursor
             onPressed: (mouse) => {
                 const pt = mapToItem(root, mouse.x, mouse.y)
@@ -184,15 +184,15 @@ Item {
 
         // Bottom Edge Grip
         Rectangle {
-            x: (parent.width - 28) / 2; y: parent.height + 3
-            width: 28; height: 3; radius: 1.5
+            x: (parent.width - 28) / 2; y: parent.height - 2
+            width: 28; height: 4; radius: 2
             color: "#ffffff"
             border { color: Qt.rgba(0, 0, 0, 0.35); width: 0.5 }
         }
         MouseArea {
             anchors { left: parent.left; right: parent.right }
             anchors.leftMargin: 26; anchors.rightMargin: 26
-            y: parent.height - 2; height: 16
+            y: parent.height - 10; height: 20
             cursorShape: Qt.SizeVerCursor
             onPressed: (mouse) => {
                 const pt = mapToItem(root, mouse.x, mouse.y)
@@ -210,15 +210,15 @@ Item {
 
         // Left Edge Grip
         Rectangle {
-            x: -6; y: (parent.height - 28) / 2
-            width: 3; height: 28; radius: 1.5
+            x: -2; y: (parent.height - 28) / 2
+            width: 4; height: 28; radius: 2
             color: "#ffffff"
             border { color: Qt.rgba(0, 0, 0, 0.35); width: 0.5 }
         }
         MouseArea {
             anchors { top: parent.top; bottom: parent.bottom }
             anchors.topMargin: 26; anchors.bottomMargin: 26
-            x: -14; width: 16
+            x: -10; width: 20
             cursorShape: Qt.SizeHorCursor
             onPressed: (mouse) => {
                 const pt = mapToItem(root, mouse.x, mouse.y)
@@ -237,15 +237,15 @@ Item {
 
         // Right Edge Grip
         Rectangle {
-            x: parent.width + 3; y: (parent.height - 28) / 2
-            width: 3; height: 28; radius: 1.5
+            x: parent.width - 2; y: (parent.height - 28) / 2
+            width: 4; height: 28; radius: 2
             color: "#ffffff"
             border { color: Qt.rgba(0, 0, 0, 0.35); width: 0.5 }
         }
         MouseArea {
             anchors { top: parent.top; bottom: parent.bottom }
             anchors.topMargin: 26; anchors.bottomMargin: 26
-            x: parent.width - 2; width: 16
+            x: parent.width - 10; width: 20
             cursorShape: Qt.SizeHorCursor
             onPressed: (mouse) => {
                 const pt = mapToItem(root, mouse.x, mouse.y)
@@ -257,7 +257,6 @@ Item {
                 const pt = mapToItem(root, mouse.x, mouse.y)
                 const dx = pt.x - root._dragStartX
                 const newW = Math.max(24, Math.min(root.screenWidth - root._origX, root._origW + dx))
-                root.rectChangeRequested(root._origX, root._origY, newW, root._origH)
             }
         }
     }
