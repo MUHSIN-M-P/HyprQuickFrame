@@ -75,6 +75,12 @@ void QuickFrameBridge::captureScreen() {
     m_tempPath = tempFile.fileName();
     tempFile.close();
 
+    // Hyprland renders its own cursor into the compositor framebuffer. Hide it briefly
+    // so grim's Image-Capture protocol does not embed the mouse pointer in the screenshot.
+    QProcess hideCursor;
+    hideCursor.start(QStringLiteral("hyprctl"), {QStringLiteral("keyword"), QStringLiteral("cursor:invisible"), QStringLiteral("1")});
+    hideCursor.waitForFinished(50);
+
     QProcess grim;
     if (!m_monitorName.isEmpty()) {
         grim.start(QStringLiteral("grim"), {QStringLiteral("-o"), m_monitorName, m_tempPath});
@@ -82,6 +88,11 @@ void QuickFrameBridge::captureScreen() {
         grim.start(QStringLiteral("grim"), {m_tempPath});
     }
     grim.waitForFinished(3000);
+
+    // Restore cursor visibility right away.
+    QProcess restoreCursor;
+    restoreCursor.start(QStringLiteral("hyprctl"), {QStringLiteral("keyword"), QStringLiteral("cursor:invisible"), QStringLiteral("0")});
+    restoreCursor.waitForFinished(50);
 
     emit tempPathChanged();
     emit captureFinished();
@@ -219,37 +230,45 @@ void QuickFrameBridge::executeAction(const QString& action, double x, double y, 
     QString cmd;
     if (action == QStringLiteral("ocr")) {
         cmd = QStringLiteral(
-            "tmp=$(mktemp --suffix=.png); "
-            "pre=$(mktemp --suffix=.png); "
+            "tmp=$(mktemp --suffix=.png) || exit 1; "
+            "pre=$(mktemp --suffix=.png) || { rm -f \"$tmp\"; exit 1; }; "
+            "cleanup() { rm -f \"$tmp\" \"$pre\" \"%1\"; }; trap cleanup EXIT; "
             "magick \"%1\" -crop \"%2\" +repage \"$tmp\" || exit 1; "
-            "magick \"$tmp\" -resize 300% -colorspace Gray -sharpen 0x1 -bordercolor white -border 10x10 \"$pre\"; "
-            "text=$(tesseract \"$pre\" stdout -l eng --psm 6 --oem 1 2>/dev/null | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'); "
-            "rm -f \"$pre\"; "
+            "magick \"$tmp\" -resize 300% -colorspace Gray -sharpen 0x1 "
+                "-bordercolor white -border 10x10 \"$pre\" || exit 1; "
+            "text=$(tesseract \"$pre\" stdout -l eng --psm 6 --oem 1 2>/dev/null "
+                "| sed 's/^[[:space:]]*//;s/[[:space:]]*$//'); "
             "if [ -n \"$text\" ]; then "
-            "  printf '%s' \"$text\" | wl-copy; "
-            "  notify-send -a \"HyprQuickFrame\" \"OCR Text Copied\" \"$text\"; "
+                "printf '%s' \"$text\" | wl-copy --type text/plain; "
+                "notify-send -a \"HyprQuickFrame\" \"OCR Text Copied\" \"$text\"; "
             "else "
-            "  notify-send -a \"HyprQuickFrame\" \"OCR Text\" \"No text recognized in selection\" -u low; "
-            "fi; "
-            "%3"
-            "rm -f \"$tmp\" \"%1\""
-        ).arg(m_tempPath, crop, m_saveToDisk ? QStringLiteral("cp \"$tmp\" \"%1\"; ").arg(out) : QString());
+                "notify-send -a \"HyprQuickFrame\" \"OCR Text\" "
+                    "\"No text recognized in selection\" -u low; "
+            "fi; %3"
+        ).arg(m_tempPath, crop,
+              m_saveToDisk ? QStringLiteral("cp \"$tmp\" \"%1\"; ").arg(out)
+                           : QString());
     } else if (action == QStringLiteral("translate")) {
         cmd = QStringLiteral(
-            "tmp=$(mktemp --suffix=.png); "
-            "pre=$(mktemp --suffix=.png); "
+            "tmp=$(mktemp --suffix=.png) || exit 1; "
+            "pre=$(mktemp --suffix=.png) || { rm -f \"$tmp\"; exit 1; }; "
+            "cleanup() { rm -f \"$tmp\" \"$pre\" \"%1\"; }; trap cleanup EXIT; "
             "magick \"%1\" -crop \"%2\" +repage \"$tmp\" || exit 1; "
-            "magick \"$tmp\" -resize 300% -colorspace Gray -sharpen 0x1 -bordercolor white -border 10x10 \"$pre\"; "
-            "text=$(tesseract \"$pre\" stdout -l eng --psm 6 --oem 1 2>/dev/null | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'); "
-            "rm -f \"$pre\"; "
+            "magick \"$tmp\" -resize 300% -colorspace Gray -sharpen 0x1 "
+                "-bordercolor white -border 10x10 \"$pre\" || exit 1; "
+            "text=$(tesseract \"$pre\" stdout -l eng --psm 6 --oem 1 2>/dev/null "
+                "| sed 's/^[[:space:]]*//;s/[[:space:]]*$//'); "
             "if [ -n \"$text\" ]; then "
-            "  printf '%s' \"$text\" | wl-copy; "
-            "  notify-send -a \"HyprQuickFrame\" \"Google Lens\" \"Opening search for: $text\"; "
-            "  python3 -c \"import urllib.parse, webbrowser, sys; webbrowser.open('https://www.google.com/search?q=' + urllib.parse.quote(sys.argv[1]))\" \"$text\"; "
+                "printf '%s' \"$text\" | wl-copy --type text/plain; "
+                "notify-send -a \"HyprQuickFrame\" \"Google Lens\" "
+                    "\"Opening search for: $text\"; "
+                "python3 -c \"import urllib.parse, webbrowser, sys; "
+                    "webbrowser.open('https://www.google.com/search?q=' + "
+                    "urllib.parse.quote(sys.argv[1]))\" \"$text\"; "
             "else "
-            "  notify-send -a \"HyprQuickFrame\" \"Google Lens\" \"No text recognized to translate\" -u low; "
-            "fi; "
-            "rm -f \"$tmp\" \"%1\""
+                "notify-send -a \"HyprQuickFrame\" \"Google Lens\" "
+                    "\"No text recognized to translate\" -u low; "
+            "fi;"
         ).arg(m_tempPath, crop);
     } else if (action == QStringLiteral("save") || (action == QStringLiteral("default") && m_saveToDisk)) {
         cmd = QStringLiteral(
@@ -260,9 +279,11 @@ void QuickFrameBridge::executeAction(const QString& action, double x, double y, 
         ).arg(m_tempPath, crop, out);
     } else {
         cmd = QStringLiteral(
-            "magick \"%1\" -crop \"%2\" +repage png:- | wl-copy -t image/png && "
-            "notify-send -a \"HyprQuickFrame\" \"Screenshot Copied\" \"Copied to clipboard\" && "
-            "rm -f \"%1\""
+            "magick \"%1\" -crop \"%2\" +repage png:- | "
+                "wl-copy --type image/png && "
+                "notify-send -a \"HyprQuickFrame\" \"Screenshot Copied\" "
+                    "\"Copied to clipboard\" && "
+                "rm -f \"%1\""
         ).arg(m_tempPath, crop);
     }
 

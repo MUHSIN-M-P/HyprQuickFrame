@@ -23,6 +23,13 @@ FreezeScreen {
     readonly property var modesList: ["region", "box", "window", "screen"]
     readonly property int modeIndex: Math.max(0, modesList.indexOf(root.mode))
 
+    // True while the user is drawing / moving / resizing a selection with the
+    // mouse. The bottom toolbar fades away during this so it never blocks or
+    // distracts from the gesture.
+    readonly property bool interacting:
+        (root.mode === "region" && regionSelector.interactionActive) ||
+        (root.mode === "box"    && boxSelector.interactionActive)
+
     // ── Keyboard Shortcuts ────────────────────────────────────────────────
     Shortcut {
         sequence: "Escape"
@@ -55,6 +62,7 @@ FreezeScreen {
     // ── Selectors ─────────────────────────────────────────────────────────
 
     RegionSelector {
+        id: regionSelector
         visible: root.mode === "region"
         anchors.fill: parent
         dimOpacity: 0.5; borderRadius: 12.0; outlineThickness: 1.5
@@ -63,6 +71,7 @@ FreezeScreen {
     }
 
     BoxSelector {
+        id: boxSelector
         visible: root.mode === "box"
         anchors.fill: parent
         tempPath:     root.tempPath
@@ -74,6 +83,7 @@ FreezeScreen {
     }
 
     WindowSelector {
+        id: windowSelector
         visible: root.mode === "window"
         anchors.fill: parent
         dimOpacity: 0.5; borderRadius: 12.0; outlineThickness: 1.5
@@ -89,6 +99,20 @@ FreezeScreen {
         width: toolbarRow.implicitWidth + 32
         height: 64
         radius: 32
+
+        // Get out of the way during any drawing / moving / resizing gesture,
+        // then fade back in when the mouse is released.
+        opacity: root.interacting ? 0.0 : 1.0
+        enabled: !root.interacting
+        scale: root.interacting ? 0.94 : 1.0
+        transformOrigin: Item.Center
+
+        Behavior on opacity {
+            NumberAnimation { duration: root.interacting ? 110 : 220; easing.type: Easing.OutCubic }
+        }
+        Behavior on scale {
+            NumberAnimation { duration: root.interacting ? 110 : 220; easing.type: Easing.OutCubic }
+        }
 
         // Apple frosted dark glass appearance
         color: Qt.rgba(0.11, 0.12, 0.15, 0.90)

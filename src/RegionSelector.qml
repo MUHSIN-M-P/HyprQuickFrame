@@ -25,11 +25,16 @@ Item {
     property real targetHeight: 0  
 
     property bool _isResizing: selectionOverlay.isResizing
+    property bool _isZooming:  selectionOverlay.isZooming
+
+    // True while the user is dragging / moving / resizing with the mouse.
+    readonly property bool interactionActive: selectionOverlay.isResizing
+        || (mouseArea.pressed && (root.targetWidth > 2 || root.targetHeight > 2))
       
-    Behavior on selectionX { enabled: !root._isResizing; SpringAnimation { spring: 4; damping: 0.4 } }  
-    Behavior on selectionY { enabled: !root._isResizing; SpringAnimation { spring: 4; damping: 0.4 } }  
-    Behavior on selectionHeight { enabled: !root._isResizing; SpringAnimation { spring: 4; damping: 0.4 } }  
-    Behavior on selectionWidth { enabled: !root._isResizing; SpringAnimation { spring: 4; damping: 0.4 } }  
+    Behavior on selectionX { enabled: !root._isResizing && !root._isZooming; SpringAnimation { spring: 4; damping: 0.4 } }  
+    Behavior on selectionY { enabled: !root._isResizing && !root._isZooming; SpringAnimation { spring: 4; damping: 0.4 } }  
+    Behavior on selectionHeight { enabled: !root._isResizing && !root._isZooming; SpringAnimation { spring: 4; damping: 0.4 } }  
+    Behavior on selectionWidth { enabled: !root._isResizing && !root._isZooming; SpringAnimation { spring: 4; damping: 0.4 } }  
       
     // Shader overlay  
     ShaderEffect {  
@@ -116,7 +121,7 @@ Item {
         anchors.fill: parent  
         z: 3  
         acceptedButtons: Qt.LeftButton | Qt.RightButton
-        cursorShape: root.hasSelection ? Qt.PointingHandCursor : Qt.CrossCursor
+        cursorShape: (root.hasSelection && !mouseArea.pressed) ? Qt.PointingHandCursor : Qt.CrossCursor
           
         Timer {  
             id: updateTimer  

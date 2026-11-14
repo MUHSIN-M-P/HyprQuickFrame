@@ -25,6 +25,11 @@ Item {
     property real selectionHeight: 0
     property bool hasSelection:    false
     property bool _isResizing:     selectionOverlay.isResizing
+    property bool _isZooming:      selectionOverlay.isZooming
+
+    // True while the user is drawing / moving / resizing with the mouse.
+    // The shell uses this to fade the bottom toolbar out of the way.
+    readonly property bool interactionActive: _isDrawing || selectionOverlay.isResizing
 
     onVisibleChanged: {
         if (!visible) {
@@ -46,18 +51,11 @@ Item {
     property real _totalPathLen: 0
     property bool _isDrawing:    false
 
-    property bool _isWheeling:    false
-    Timer {
-        id: wheelTimer
-        interval: 140
-        onTriggered: root._isWheeling = false
-    }
-
     // Smooth animated selection box (disabled during handle resize or mouse wheel for 1:1 precision)
-    Behavior on selectionX      { enabled: !root._isResizing && !root._isWheeling; SpringAnimation { spring: 4; damping: 0.4 } }
-    Behavior on selectionY      { enabled: !root._isResizing && !root._isWheeling; SpringAnimation { spring: 4; damping: 0.4 } }
-    Behavior on selectionWidth  { enabled: !root._isResizing && !root._isWheeling; SpringAnimation { spring: 4; damping: 0.4 } }
-    Behavior on selectionHeight { enabled: !root._isResizing && !root._isWheeling; SpringAnimation { spring: 4; damping: 0.4 } }
+    Behavior on selectionX      { enabled: !root._isResizing && !root._isZooming; SpringAnimation { spring: 4; damping: 0.4 } }
+    Behavior on selectionY      { enabled: !root._isResizing && !root._isZooming; SpringAnimation { spring: 4; damping: 0.4 } }
+    Behavior on selectionWidth  { enabled: !root._isResizing && !root._isZooming; SpringAnimation { spring: 4; damping: 0.4 } }
+    Behavior on selectionHeight { enabled: !root._isResizing && !root._isZooming; SpringAnimation { spring: 4; damping: 0.4 } }
 
     // ── Dimming shader — dims whole screen, punches hole when selection exists ──
     ShaderEffect {
@@ -344,22 +342,7 @@ Item {
         z: 3
         hoverEnabled: false
         acceptedButtons: Qt.LeftButton | Qt.RightButton
-        cursorShape: root.hasSelection ? Qt.PointingHandCursor : Qt.CrossCursor
-
-        onWheel: (wheel) => {
-            if (!root.hasSelection || root.selectionWidth <= 0 || root.selectionHeight <= 0) return
-            root._isWheeling = true
-            wheelTimer.restart()
-            const factor = wheel.angleDelta.y > 0 ? 1.04 : 0.96
-            const oldW = root.selectionWidth
-            const oldH = root.selectionHeight
-            const newW = Math.max(16, Math.min(root.width, oldW * factor))
-            const newH = Math.max(10, Math.min(root.height, oldH * factor))
-            root.selectionX = Math.max(0, root.selectionX - (newW - oldW) * 0.5)
-            root.selectionY = Math.max(0, root.selectionY - (newH - oldH) * 0.5)
-            root.selectionWidth = newW
-            root.selectionHeight = newH
-        }
+        cursorShape: (root.hasSelection && !mouseArea.pressed) ? Qt.PointingHandCursor : Qt.CrossCursor
 
         onPressed: (mouse) => {
             // Right-click: clear selection or cancel

@@ -11,6 +11,7 @@ Item {
     property real screenWidth: 1920
     property real screenHeight: 1080
     property bool isResizing: false
+    property bool isZooming: false
 
     signal rectChangeRequested(real newX, real newY, real newWidth, real newHeight)
     signal actionTriggered(string action, real x, real y, real width, real height)
@@ -18,30 +19,226 @@ Item {
 
     visible: active && selectionWidth > 0 && selectionHeight > 0
     z: 10
+    anchors.fill: parent
+
+    // ── Hit-testing geometry ───────────────────────────────────────────────
+    readonly property real _grab: 16        // corner grab radius
+    readonly property real _edgeGrab: 9     // edge grab thickness
+    readonly property real _minSize: 24
 
     // ── Drag state in screen coordinates ──────────────────────────────────
-    property real _dragStartX: 0
-    property real _dragStartY: 0
+    property string _zone: ""
+    property real _pressX: 0
+    property real _pressY: 0
     property real _origX: 0
     property real _origY: 0
     property real _origW: 0
     property real _origH: 0
+    property bool _dragged: false
+    property bool ctrlHeld: false
 
-    function _startDrag(screenX, screenY) {
-        _dragStartX = screenX
-        _dragStartY = screenY
-        _origX = root.selectionX
-        _origY = root.selectionY
-        _origW = root.selectionWidth
-        _origH = root.selectionHeight
-        root.isResizing = true
+    Timer {
+        id: zoomTimer
+        interval: 140
+        onTriggered: root.isZooming = false
     }
 
-    function _endDrag() {
-        root.isResizing = false
+    // Returns "topLeft", "top", "topRight", "right", "bottomRight",
+    // "bottom", "bottomLeft", "left", "move" or "" for no hit.
+    function _zoneAt(px, py) {
+        if (root.selectionWidth <= 0 || root.selectionHeight <= 0) return ""
+
+        const x1 = root.selectionX
+        const y1 = root.selectionY
+        const x2 = x1 + root.selectionWidth
+        const y2 = y1 + root.selectionHeight
+        const g  = root._grab
+
+        // Fast reject: outside the frame's grab margin
+        if (px < x1 - g || px > x2 + g || py < y1 - g || py > y2 + g) return ""
+
+        const nearL = px <= x1 + g
+        const nearR = px >= x2 - g
+        const nearT = py <= y1 + g
+        const nearB = py >= y2 - g
+
+        // Corners first so they always win over the edge strips
+        if (nearT && nearL) return "topLeft"
+        if (nearT && nearR) return "topRight"
+        if (nearB && nearL) return "bottomLeft"
+        if (nearB && nearR) return "bottomRight"
+
+        if (py <= y1 + root._edgeGrab) return "top"
+        if (py >= y2 - root._edgeGrab) return "bottom"
+        if (px <= x1 + root._edgeGrab) return "left"
+        if (px >= x2 - root._edgeGrab) return "right"
+
+        // Interior — drag to reposition the selection
+        if (px >= x1 && px <= x2 && py >= y1 && py <= y2) return "move"
+        return ""
     }
 
-    // ── Outer Selection Handles (aligned with box perimeter) ──
+    function _cursorFor(zone, ctrlHeld) {
+        switch (zone) {
+        case "topLeft":
+        case "bottomRight":  return Qt.SizeFDiagCursor
+        case "topRight":
+        case "bottomLeft":   return Qt.SizeBDiagCursor
+        case "top":
+        case "bottom":       return Qt.SizeVerCursor
+        case "left":
+        case "right":        return Qt.SizeHorCursor
+        case "move":         return ctrlHeld ? Qt.SizeAllCursor : Qt.CrossCursor
+        default:             return Qt.CrossCursor
+        }
+    }
+
+    function _applyDrag(dx, dy) {
+        const minS   = root._minSize
+        const right  = root._origX + root._origW
+        const bottom = root._origY + root._origH
+
+        let nx = root._origX
+        let ny = root._origY
+        let nw = root._origW
+        let nh = root._origH
+        const z = root._zone
+
+        switch (z) {
+        case "move":
+            nx = Math.max(0, Math.min(root.screenWidth  - nw, root._origX + dx))
+            ny = Math.max(0, Math.min(root.screenHeight - nh, root._origY + dy))
+            break
+        case "left":
+        case "topLeft":
+        case "bottomLeft":
+            nx = Math.max(0, Math.min(right - minS, root._origX + dx))
+            nw = right - nx
+            break
+        case "right":
+        case "topRight":
+        case "bottomRight":
+            nw = Math.max(minS, Math.min(root.screenWidth - root._origX, root._origW + dx))
+            break
+        }
+
+        switch (z) {
+        case "top":
+        case "topLeft":
+        case "topRight":
+            ny = Math.max(0, Math.min(bottom - minS, root._origY + dy))
+            nh = bottom - ny
+            break
+        case "bottom":
+        case "bottomLeft":
+        case "bottomRight":
+            nh = Math.max(minS, Math.min(root.screenHeight - root._origY, root._origH + dy))
+            break
+        }
+
+        root.rectChangeRequested(nx, ny, nw, nh)
+    }
+
+    // ── Static full-screen interaction layer ──────────────────────────────
+    // Keeping this layer fixed in screen space is what makes resizing stable:
+    // the old per-handle MouseAreas moved together with the box, which made
+    // coordinate mapping drift and broke several corners/edges.
+    MouseArea {
+        id: interactionArea
+        anchors.fill: parent
+        z: 0
+        hoverEnabled: true
+        acceptedButtons: Qt.LeftButton
+
+        cursorShape: {
+            const zone = root._zoneAt(mouseX, mouseY)
+            // While actively moving, use a grabbing hand so the user sees it's a move.
+            if (root._zone === "move" && root.isResizing) return Qt.ClosedHandCursor
+            return root._cursorFor(zone, root.ctrlHeld)
+        }
+
+        onPressed: (mouse) => {
+            root.ctrlHeld = (mouse.modifiers & Qt.ControlModifier) !== 0
+            const z = root._zoneAt(mouse.x, mouse.y)
+            if (z === "") {
+                // Let the selector underneath start a fresh gesture
+                mouse.accepted = false
+                return
+            }
+            if (z === "move" && !root.ctrlHeld) {
+                // Dragging inside a selection without Ctrl must not move the box:
+                // pass the event through so a draw/redraw gesture underneath works.
+                mouse.accepted = false
+                return
+            }
+            root._zone    = z
+            root._pressX  = mouse.x
+            root._pressY  = mouse.y
+            root._origX   = root.selectionX
+            root._origY   = root.selectionY
+            root._origW   = root.selectionWidth
+            root._origH   = root.selectionHeight
+            root._dragged = false
+            root.isResizing = true
+            mouse.accepted = true
+        }
+
+        onPositionChanged: (mouse) => {
+            root.ctrlHeld = (mouse.modifiers & Qt.ControlModifier) !== 0
+            if (root._zone === "" || !(mouse.buttons & Qt.LeftButton)) return
+
+            const dx = mouse.x - root._pressX
+            const dy = mouse.y - root._pressY
+            if (Math.abs(dx) > 2 || Math.abs(dy) > 2) root._dragged = true
+
+            root._applyDrag(dx, dy)
+        }
+
+        onReleased: (mouse) => {
+            if (mouse.button !== Qt.LeftButton) return
+            const z = root._zone
+            const wasDragged = root._dragged
+
+            root._zone = ""
+            root._dragged = false
+            root.isResizing = false
+            root.ctrlHeld = false
+
+            // A plain click inside the selection confirms it (same as before).
+            if (z === "move" && !wasDragged) {
+                root.actionTriggered("default",
+                    Math.round(root.selectionX), Math.round(root.selectionY),
+                    Math.round(root.selectionWidth), Math.round(root.selectionHeight))
+            }
+        }
+
+        onCanceled: {
+            root._zone = ""
+            root._dragged = false
+            root.isResizing = false
+            root.ctrlHeld = false
+        }
+
+        // Wheel = proportional resize around the selection centre
+        onWheel: (wheel) => {
+            const step = wheel.angleDelta.y > 0 ? 1.04 : 0.96
+            const oldW = root.selectionWidth
+            const oldH = root.selectionHeight
+            if (oldW <= 0 || oldH <= 0) { wheel.accepted = false; return }
+
+            const newW = Math.max(root._minSize, Math.min(root.screenWidth,  oldW * step))
+            const newH = Math.max(root._minSize, Math.min(root.screenHeight, oldH * step))
+            const nx = Math.max(0, Math.min(root.screenWidth  - newW, root.selectionX - (newW - oldW) * 0.5))
+            const ny = Math.max(0, Math.min(root.screenHeight - newH, root.selectionY - (newH - oldH) * 0.5))
+
+            root.isZooming = true
+            zoomTimer.restart()
+            root.rectChangeRequested(nx, ny, newW, newH)
+            wheel.accepted = true
+        }
+    }
+
+    // ── 4 Outer Curved Corner Brackets (visual only) ──────────────────────
     Item {
         id: boxFrame
         x: root.selectionX
@@ -49,215 +246,57 @@ Item {
         width: root.selectionWidth
         height: root.selectionHeight
 
-        // ── 4 Outer Curved Corner Brackets ────────────────────────────────
-        // Top-Left Corner ⌜
         Image {
             x: -4; y: -4; width: 32; height: 32
             source: Qt.resolvedUrl("../icons/lens_corner.svg")
             rotation: 0
-            MouseArea {
-                anchors.fill: parent; anchors.margins: -8
-                cursorShape: Qt.SizeFDiagCursor
-                onPressed: (mouse) => {
-                    const pt = mapToItem(root, mouse.x, mouse.y)
-                    root._startDrag(pt.x, pt.y)
-                }
-                onReleased: root._endDrag()
-                onPositionChanged: (mouse) => {
-                    if (!pressed) return
-                    const pt = mapToItem(root, mouse.x, mouse.y)
-                    const dx = pt.x - root._dragStartX
-                    const dy = pt.y - root._dragStartY
-                    const right = root._origX + root._origW
-                    const bottom = root._origY + root._origH
-                    const newX = Math.max(0, Math.min(right - 24, root._origX + dx))
-                    const newY = Math.max(0, Math.min(bottom - 24, root._origY + dy))
-                    root.rectChangeRequested(newX, newY, right - newX, bottom - newY)
-                }
-            }
         }
 
-        // Top-Right Corner ⌝
         Image {
             x: parent.width - 28; y: -4; width: 32; height: 32
             source: Qt.resolvedUrl("../icons/lens_corner.svg")
             rotation: 90
-            MouseArea {
-                anchors.fill: parent; anchors.margins: -8
-                cursorShape: Qt.SizeBDiagCursor
-                onPressed: (mouse) => {
-                    const pt = mapToItem(root, mouse.x, mouse.y)
-                    root._startDrag(pt.x, pt.y)
-                }
-                onReleased: root._endDrag()
-                onPositionChanged: (mouse) => {
-                    if (!pressed) return
-                    const pt = mapToItem(root, mouse.x, mouse.y)
-                    const dx = pt.x - root._dragStartX
-                    const dy = pt.y - root._dragStartY
-                    const bottom = root._origY + root._origH
-                    const newY = Math.max(0, Math.min(bottom - 24, root._origY + dy))
-                    const newW = Math.max(24, Math.min(root.screenWidth - root._origX, root._origW + dx))
-                    root.rectChangeRequested(root._origX, newY, newW, bottom - newY)
-                }
-            }
         }
 
-        // Bottom-Right Corner ⌟
         Image {
             x: parent.width - 28; y: parent.height - 28; width: 32; height: 32
             source: Qt.resolvedUrl("../icons/lens_corner.svg")
             rotation: 180
-            MouseArea {
-                anchors.fill: parent; anchors.margins: -8
-                cursorShape: Qt.SizeFDiagCursor
-                onPressed: (mouse) => {
-                    const pt = mapToItem(root, mouse.x, mouse.y)
-                    root._startDrag(pt.x, pt.y)
-                }
-                onReleased: root._endDrag()
-                onPositionChanged: (mouse) => {
-                    if (!pressed) return
-                    const pt = mapToItem(root, mouse.x, mouse.y)
-                    const dx = pt.x - root._dragStartX
-                    const dy = pt.y - root._dragStartY
-                    const newW = Math.max(24, Math.min(root.screenWidth - root._origX, root._origW + dx))
-                    const newH = Math.max(24, Math.min(root.screenHeight - root._origY, root._origH + dy))
-                    root.rectChangeRequested(root._origX, root._origY, newW, newH)
-                }
-            }
         }
 
-        // Bottom-Left Corner ⌞
         Image {
             x: -4; y: parent.height - 28; width: 32; height: 32
             source: Qt.resolvedUrl("../icons/lens_corner.svg")
             rotation: 270
-            MouseArea {
-                anchors.fill: parent; anchors.margins: -8
-                cursorShape: Qt.SizeBDiagCursor
-                onPressed: (mouse) => {
-                    const pt = mapToItem(root, mouse.x, mouse.y)
-                    root._startDrag(pt.x, pt.y)
-                }
-                onReleased: root._endDrag()
-                onPositionChanged: (mouse) => {
-                    if (!pressed) return
-                    const pt = mapToItem(root, mouse.x, mouse.y)
-                    const dx = pt.x - root._dragStartX
-                    const dy = pt.y - root._dragStartY
-                    const right = root._origX + root._origW
-                    const newX = Math.max(0, Math.min(right - 24, root._origX + dx))
-                    const newH = Math.max(24, Math.min(root.screenHeight - root._origY, root._origH + dy))
-                    root.rectChangeRequested(newX, root._origY, right - newX, newH)
-                }
-            }
         }
 
-        // ── 4 Edge Drag Grips ──────────────────────────────────────────────
-        // Top Edge Grip
+        // ── 4 Edge Drag Grips (visual only) ───────────────────────────────
         Rectangle {
             x: (parent.width - 28) / 2; y: -2
             width: 28; height: 4; radius: 2
             color: "#ffffff"
             border { color: Qt.rgba(0, 0, 0, 0.35); width: 0.5 }
         }
-        MouseArea {
-            anchors { left: parent.left; right: parent.right }
-            anchors.leftMargin: 26; anchors.rightMargin: 26
-            y: -10; height: 20
-            cursorShape: Qt.SizeVerCursor
-            onPressed: (mouse) => {
-                const pt = mapToItem(root, mouse.x, mouse.y)
-                root._startDrag(pt.x, pt.y)
-            }
-            onReleased: root._endDrag()
-            onPositionChanged: (mouse) => {
-                if (!pressed) return
-                const pt = mapToItem(root, mouse.x, mouse.y)
-                const dy = pt.y - root._dragStartY
-                const bottom = root._origY + root._origH
-                const newY = Math.max(0, Math.min(bottom - 24, root._origY + dy))
-                root.rectChangeRequested(root._origX, newY, root._origW, bottom - newY)
-            }
-        }
 
-        // Bottom Edge Grip
         Rectangle {
             x: (parent.width - 28) / 2; y: parent.height - 2
             width: 28; height: 4; radius: 2
             color: "#ffffff"
             border { color: Qt.rgba(0, 0, 0, 0.35); width: 0.5 }
         }
-        MouseArea {
-            anchors { left: parent.left; right: parent.right }
-            anchors.leftMargin: 26; anchors.rightMargin: 26
-            y: parent.height - 10; height: 20
-            cursorShape: Qt.SizeVerCursor
-            onPressed: (mouse) => {
-                const pt = mapToItem(root, mouse.x, mouse.y)
-                root._startDrag(pt.x, pt.y)
-            }
-            onReleased: root._endDrag()
-            onPositionChanged: (mouse) => {
-                if (!pressed) return
-                const pt = mapToItem(root, mouse.x, mouse.y)
-                const dy = pt.y - root._dragStartY
-                const newH = Math.max(24, Math.min(root.screenHeight - root._origY, root._origH + dy))
-                root.rectChangeRequested(root._origX, root._origY, root._origW, newH)
-            }
-        }
 
-        // Left Edge Grip
         Rectangle {
             x: -2; y: (parent.height - 28) / 2
             width: 4; height: 28; radius: 2
             color: "#ffffff"
             border { color: Qt.rgba(0, 0, 0, 0.35); width: 0.5 }
         }
-        MouseArea {
-            anchors { top: parent.top; bottom: parent.bottom }
-            anchors.topMargin: 26; anchors.bottomMargin: 26
-            x: -10; width: 20
-            cursorShape: Qt.SizeHorCursor
-            onPressed: (mouse) => {
-                const pt = mapToItem(root, mouse.x, mouse.y)
-                root._startDrag(pt.x, pt.y)
-            }
-            onReleased: root._endDrag()
-            onPositionChanged: (mouse) => {
-                if (!pressed) return
-                const pt = mapToItem(root, mouse.x, mouse.y)
-                const dx = pt.x - root._dragStartX
-                const right = root._origX + root._origW
-                const newX = Math.max(0, Math.min(right - 24, root._origX + dx))
-                root.rectChangeRequested(newX, root._origY, right - newX, root._origH)
-            }
-        }
 
-        // Right Edge Grip
         Rectangle {
             x: parent.width - 2; y: (parent.height - 28) / 2
             width: 4; height: 28; radius: 2
             color: "#ffffff"
             border { color: Qt.rgba(0, 0, 0, 0.35); width: 0.5 }
-        }
-        MouseArea {
-            anchors { top: parent.top; bottom: parent.bottom }
-            anchors.topMargin: 26; anchors.bottomMargin: 26
-            x: parent.width - 10; width: 20
-            cursorShape: Qt.SizeHorCursor
-            onPressed: (mouse) => {
-                const pt = mapToItem(root, mouse.x, mouse.y)
-                root._startDrag(pt.x, pt.y)
-            }
-            onReleased: root._endDrag()
-            onPositionChanged: (mouse) => {
-                if (!pressed) return
-                const pt = mapToItem(root, mouse.x, mouse.y)
-                const dx = pt.x - root._dragStartX
-                const newW = Math.max(24, Math.min(root.screenWidth - root._origX, root._origW + dx))
-            }
         }
     }
 
